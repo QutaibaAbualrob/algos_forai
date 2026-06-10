@@ -166,9 +166,9 @@ class GoalBasedAgent:
         else:
             self.planned_path = []
 
-    def step(self) -> str:
+    def step(self) -> tuple[str, str]:
         if self.path_index >= len(self.planned_path):
-            return "stop"
+            return ("stop", "no path")
 
         # advance past cells we're already on
         while (self.path_index < len(self.planned_path) and
@@ -176,7 +176,7 @@ class GoalBasedAgent:
             self.path_index += 1
 
         if self.path_index >= len(self.planned_path):
-            return "stop"
+            return ("stop", "path complete")
 
         target = self.planned_path[self.path_index]
         r, c = self.world.agent_pos
@@ -188,7 +188,7 @@ class GoalBasedAgent:
         else:           action = 'left'
 
         self.world.move_agent(action)
-        return action
+        return (action, f"→step {self.path_index}/{len(self.planned_path)}")
 
     def has_path(self) -> bool:
         return len(self.planned_path) > 0
@@ -260,44 +260,65 @@ class LearningAgent:
         self.q_table[state][ai] = old + self.alpha * (
             reward + self.gamma * nxt - old)
 
-    # ── episode ──────────────────────────────────────────────
+    # ── episode (step-by-step) ──────────────────────────────
 
-    def run_episode(self) -> float:
+    def start_episode(self) -> int:
+        """Begin a new episode. Returns initial state index."""
         self.world.reset()
-        state = self.get_state()
-        total = 0.0
-        limit = self.world.rows * self.world.cols * 2
+        self._episode_steps = 0
+        self._episode_reward = 0.0
+        self._episode_limit = self.world.rows * self.world.cols * 2
+        self._episode_done = False
+        return self.get_state()
 
-        for _ in range(limit):
-            action = self.act(state)
-            moved = self.world.move_agent(action)
-            nxt = self.get_state()
+    def step_episode(self, state: int) -> tuple[str, float, int, bool]:
+        """Take one action. Returns (action, reward, next_state, done)."""
+        if self._episode_done:
+            return ("stop", 0.0, state, True)
 
-            if self.world.is_goal(self.world.agent_pos):
-                reward = 50.0
-            elif not moved:
-                reward = -10.0
-            else:
-                reward = -1.0
+        action = self.act(state)
+        moved = self.world.move_agent(action)
+        nxt = self.get_state()
 
-            self.learn(state, action, reward, nxt)
-            total += reward
+        if self.world.is_goal(self.world.agent_pos):
+            reward = 50.0
+            self._episode_done = True
+        elif not moved:
+            reward = -10.0
+        else:
+            # mud cells cost more than normal — agent learns to avoid them
+            cell_cost = self.world.get_cost(self.world.agent_pos)
+            reward = -float(cell_cost)
 
-            if self.world.is_goal(self.world.agent_pos):
-                break
-            state = nxt
+        self.learn(state, action, reward, nxt)
+        self._episode_reward += reward
+        self._episode_steps += 1
 
-        # linear epsilon decay
+        if self._episode_steps >= self._episode_limit:
+            self._episode_done = True
+
+        return (action, reward, nxt, self._episode_done)
+
+    def end_episode(self):
+        """Finish episode: decay epsilon, inc counter, reset position."""
         self.episode_count += 1
         progress = min(self.episode_count / self.episodes, 1.0)
         self.epsilon = max(0.01, self.initial_epsilon * (1.0 - progress))
-
-        return total
+        self.world.reset()
+        return self._episode_reward
 
     def train_all(self) -> list[float]:
         self.reward_history = []
         for _ in range(self.episodes):
-            self.reward_history.append(self.run_episode())
+            if self.episode_count >= self.episodes:
+                break
+            state = self.start_episode()
+            while True:
+                _, _, state, done = self.step_episode(state)
+                if done:
+                    break
+            reward = self.end_episode()
+            self.reward_history.append(reward)
         return self.reward_history
 
     # ── GUI accessors ────────────────────────────────────────

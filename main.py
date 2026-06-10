@@ -192,6 +192,7 @@ class App(tk.Tk):
         self.generator = None
         self.search_done = False; self.search_result = None
         self.agent = None
+        self._learn_state = None    # learning agent: current state during episode
         self.gen_a = self.gen_b = None
         self.done_a = self.done_b = False
         self.res_a = self.res_b = None
@@ -420,6 +421,7 @@ class App(tk.Tk):
         self.world.reset()
         self.generator = None
         self.search_done = False; self.search_result = None
+        self._learn_state = None
         self.gen_a = self.gen_b = None
         self.done_a = self.done_b = False
         self.res_a = self.res_b = None
@@ -509,13 +511,23 @@ class App(tk.Tk):
             return
 
         if isinstance(self.agent, LearningAgent):
-            reward = self.agent.run_episode()
-            ep = self.agent.episode_count
-            total = self.agent.episodes
-            eps = self.agent.get_epsilon()
-            self.logger.learning_episode(ep, total, reward, eps)
-            self.log(f"Ep {ep}: reward={reward:.0f}  ε={eps:.3f}")
+            if self.agent.episode_count >= self.agent.episodes:
+                self.log("Training complete — all episodes done.")
+                self._stop()
+                return
+            if self._learn_state is None:
+                self._learn_state = self.agent.start_episode()
+            state = self._learn_state
+            action, reward, nxt, done = self.agent.step_episode(state)
+            self._learn_state = nxt
             self._display_agent()
+            self.log(f"→ {action}  reward={reward:+.0f}  ε={self.agent.get_epsilon():.3f}")
+            if done:
+                ep_reward = self.agent.end_episode()
+                self._learn_state = None
+                self.logger.learning_episode(self.agent.episode_count,
+                    self.agent.episodes, ep_reward, self.agent.get_epsilon())
+                self.log(f"Ep {self.agent.episode_count} done — total reward={ep_reward:.0f}")
         else:
             action, rule = self.agent.step()
             self.logger.step_agent(action, rule, self.agent_type)
@@ -524,6 +536,7 @@ class App(tk.Tk):
             if action == "stop":
                 self.logger.agent_stuck(self.agent_type, self.world.agent_pos)
                 self.log("Agent stopped.")
+                self._stop()   # auto-stop the run loop
 
     def _search_step(self):
         if self.generator is None or self.search_done:

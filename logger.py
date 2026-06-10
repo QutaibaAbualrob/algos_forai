@@ -1,6 +1,6 @@
 """Debug logger — writes structured logs to logs/ folder.
 
-Filename format:  {file_number}_{hours}:{minutes}.log
+Filename format:  {file_number}_{hours}-{minutes}.log
 One log file per session (app launch = new file).
 """
 
@@ -36,7 +36,7 @@ class SessionLogger:
         _ensure_log_dir()
         self.num = _next_file_number()
         now = datetime.datetime.now()
-        self.filename = f"{self.num:03d}_{now.hour:02d}:{now.minute:02d}.log"
+        self.filename = f"{self.num:03d}_{now.hour:02d}-{now.minute:02d}.log"
         self.path = os.path.join(LOG_DIR, self.filename)
         self._buffer: list[str] = []
         self._write(f"=== SESSION START === {now.strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -49,8 +49,8 @@ class SessionLogger:
     def preset(self, name: str):
         self._write(f"[PRESET] {name}")
 
-    def step_agent(self, action: str, rule: str, agent_type: str, step: int = 0):
-        self._write(f"[AGENT] {agent_type} | step={step} | action={action} | rule={rule}")
+    def step_agent(self, action: str, rule: str, agent_type: str):
+        self._write(f"[AGENT] {agent_type} | action={action} | rule={rule}")
 
     def step_search(self, algo: str, pos: tuple, frontier: int, g: float = 0, h: float = 0):
         extra = f" g={g:.1f} h={h:.1f} f={g+h:.1f}" if (g or h) else ""

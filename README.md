@@ -24,6 +24,55 @@ A single Python GUI (tkinter, stdlib only) that **shows AI concepts executing st
 
 ---
 
+## Color Reference
+
+The canvas uses distinct color schemes for terrain, search overlays, and agent overlays.
+**Each mode has its own overlay set — search colors never appear in Agent mode, and vice versa.**
+
+### Terrain (visible in all modes)
+
+| Terrain | Color | Hex | Label |
+|---------|-------|-----|-------|
+| Normal cell | White | `#ffffff` | — |
+| Mud (cost 5) | Tan / brown | `#c8b080` | `~` (dark brown text) |
+| Wall (blocked) | Dark gray | `#333333` | `#` (white text) |
+| Start position | Blue | `#4488ff` | — |
+| Goal position | Red | `#ff4444` | — |
+
+### Search Mode & Compare Mode overlays
+
+These appear **only** when running a search algorithm (BFS, DFS, A*, etc.) in
+Search or Compare mode. They are never shown in Agent mode.
+
+| Overlay | Color | Hex | Meaning |
+|---------|-------|-----|---------|
+| Visited cell | Light green | `#88cc88` | Node has been expanded (removed from frontier) |
+| Frontier cell | Yellow | `#ffff88` | Queued but not yet expanded |
+| Current cell | Orange | `#ff8844` | The node being expanded *right now* |
+| Solution path | Purple | `#cc66ff` | Final path from start to goal (shown on completion) |
+
+### Agent Mode overlays
+
+These appear only in Agent mode. Each agent type uses a different subset.
+
+| Overlay | Color | Hex | Agent types | Meaning |
+|---------|-------|-----|-------------|---------|
+| Agent dot | Green oval | `#00cc00` | **All agents** | Current position of the agent |
+| Planned path | Purple outline | `#cc66ff` | Goal-based, Utility-based | Path computed via A* or UCS |
+| Visited cells | Green outline | `#00cc00` | Model Reflex | Internal map — cells the agent has explored |
+| Q-value heatmap | Yellow scale | `#XX00` | Learning (Q-learning) | Max Q-value per cell. Intensity 100→255: dark yellow → bright yellow. Cells with `max Q ≤ 0` are invisible. |
+
+**How the Q-heatmap works**: After each step, `get_max_q_per_cell()` collapses
+the Q-table (4 actions per state) into one number per cell: `max(Q_up, Q_right,
+Q_down, Q_left)`. The canvas normalizes these against the board's highest value
+(`mx`), maps each to an intensity `100 + 155 × (v / mx)`, and draws a small
+inner rectangle per cell in hex `#RR00` where R=G=intensity, B=0. This produces
+the yellow scale. The `v > 0` gate means no rectangle is drawn until the agent
+first reaches the goal (reward +50), after which positive Q-values propagate
+outward each episode.
+
+---
+
 ## Section 1: Agents (5 types)
 
 Each agent adds **one capability** to the decision pipeline:
@@ -45,7 +94,7 @@ Each agent adds **one capability** to the decision pipeline:
 | Move to free cell | −1 |
 | Hit wall (stay in place) | −10 |
 | Reach goal | +50 |
-| Step into mud | −1 (same as normal — agent learns to avoid mud because it takes more STEPS through it, not per-step cost) |
+| Step into mud | −5 (per cell cost — agent learns to avoid expensive terrain) |
 
 **Terminal state**: Q(goal_state, any_action) = 0. Final Q-update: `Q(s,a) ← Q(s,a) + α[R_goal + γ×0 − Q(s,a)]`.
 
