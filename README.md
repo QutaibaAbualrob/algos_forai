@@ -30,7 +30,7 @@ Each agent adds **one capability** to the decision pipeline:
 
 | # | Agent | Percept | Internal State | Decision Logic | Behavior |
 |---|---|---|---|---|---|
-| 1 | **Simple Reflex** | 4 neighbor cells (N,S,E,W) | None | Condition-action rules: "neighbor is goal → go there. obstacle ahead → turn right. else → forward." | Reactive. Loops. Hits dead ends repeatedly. |
+| 1 | **Simple Reflex** | 4 neighbor cells (N,S,E,W) | None | Pure neighbour-choice rules: checks N,S,E,W in URDL order (up,right,down,left). Picks the first non-wall neighbour. If goal among them → goes there. No memory — cannot avoid revisiting. | Reactive. Loops in dead-end corridors. |
 | 2 | **Model-based Reflex** | Same 4 neighbors | Map of visited cells + known walls | Percept → update model (mark current, log walls) → model + percept → rules → action. Avoids visited + walls. **Fallback**: if all neighbors blocked/visited → pick least-recently-visited. | Systematic. Avoids revisiting. Map grows on screen. |
 | 3 | **Goal-based** | Full grid (given) | Goal coords. Planned path. | Calls a search algorithm (BFS/DFS/UCS/A*). Plans full path, then executes. | One-time plan, smooth execution. Path shown on canvas. |
 | 4 | **Utility-based** | Full grid | Cost function + path. | Same architecture but uses UCS or A*. Optimizes for cost. | Path arcs around mud. "Cost: 8 vs 16 if through mud." |
@@ -51,6 +51,8 @@ Each agent adds **one capability** to the decision pipeline:
 
 **Episode cutoff**: max `rows × cols × 2` steps per episode (prevents infinite loops).
 
+**Wall hits**: when the agent tries to move into a wall, `move_agent()` returns False, the agent stays in the same state, and receives −10 reward. This creates a self-loop transition: (s, a) → (s, r=−10). The Q-value for that action in that state will drop, discouraging the agent from repeating the failed action. This is correct Q-learning behavior — the agent learns to avoid walls by experiencing penalties.
+
 **Episodes**: 100 (preset A/B) or 300 (preset C). ε decays linearly to 0.01.
 
 ### Agent Parameters (Agent mode only)
@@ -67,6 +69,8 @@ Each agent adds **one capability** to the decision pipeline:
 ---
 
 ## Section 2: Search Algorithms (7 algorithms)
+
+**Canonical neighbor order**: Up, Right, Down, Left (URDL) — used by ALL algorithms and `GridWorld.get_neighbors()`. This makes expansion order deterministic and reproducible.
 
 | # | Algorithm | Data Structure | g(n) | h(n) | Behavior |
 |---|---|---|---|---|---|
@@ -124,10 +128,10 @@ S  ·  ·  ·  ·  ·
 ·  ·  ·  ·  ·  G
 ```
 - S=(0,0), G=(5,5). Mud at (2,2),(2,3),(2,4),(3,2),(3,3),(3,4). Walls block right edge: (2,5),(3,5),(4,5).
-- **Greedy's path**: diagonal toward G → enters mud at (2,2) → blocked by wall at (2,5) → forced deeper into mud → exits at (4,4) → down to G. **4 mud cells. Cost ≈ 25.**
-- **A\*'s path**: goes around via left edge. S→down to (5,0)→right to G. All cost 1. **Cost = 9.**
-- **Divergence**: 25 vs 9 — nearly 3× worse.
-- **Teaches**: Why f(n)=g(n)+h(n) is fundamental. Heuristic alone is blind to cost.
+- **Greedy's path** (verified by manual trace): S→right along row 0 to (0,5)→(1,5)→(1,4)→enters mud at (2,4)→(3,4)→exits at (4,4)→(5,4)→G. **2 mud cells. Cost = 17.**
+- **A\\*'s path**: goes around via left edge. S→down to (5,0)→right along row 5 to G. All cost 1. **Cost = 9.**
+- **Divergence**: 17 vs 9 — nearly 2× worse. Greedy ignores cost, takes the shorter-heuristic muddy path. A* factors actual cost into f(n).
+- **Teaches**: Why f(n)=g(n)+h(n) matters. Heuristic alone is blind to cost. Even on a small grid, the gap is real and visible.
 
 ---
 
@@ -144,15 +148,15 @@ S  ·  ·  ·  ·  ·
 │                      │                                          │
 │  ·  ·  ·  ·  ·  ·   │  ·  ·  ·  ·  ·  ·                       │
 │  ·  ·  ·  ·  ·  ·   │  ·  ·  ·  ·  ·  ·                       │
-│  ·  ·  ~  ~  ~  #   │  ·  ·  ~  ~  ~  #                       │
-│  ·  ·  ~  ~  ~  #   │  ·  ·  ~  ~  ~  #                       │
-│  ·  ·  ·  ·  ·  #   │  ·  ·  ·  ·  ·  #                       │
+│  ·  ·  ~  ~  ~  #   │  ·  ·  ~  ~  🟩  #    ← mud + Greedy trail│
+│  ·  ·  ~  ~  ~  #   │  ·  ·  ~  ~  🟩  #                       │
+│  ·  ·  ·  ·  ·  #   │  ·  ·  ·  ·  🟩  #                       │
 │  🟦  🟩  🟩  🟩  🟩  🟥  │  🟦  🟩  🟩  🟩  🟩  🟥                     │
 │                      │                                          │
-│  Nodes: 16  Cost: 9  │  Nodes: 48  Cost: 25                     │
+│  Nodes: 16  Cost: 9  │  Nodes: 27  Cost: 17                     │
 ├──────────────────────┴──────────────────────────────────────────┤
-│  A*: 16 nodes, cost 9 (optimal, went around).                   │
-│  Greedy: 48 nodes, cost 25 (through mud, nearly 3× worse).      │
+│  A*: 16 nodes, cost 9 (optimal, went around via left edge).     │
+│  Greedy: 27 nodes, cost 17 (2 mud cells — nearly 2× worse).     │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -160,7 +164,7 @@ S  ·  ·  ·  ·  ·
 
 **Play**: Both advance in lockstep. If one finishes early, the other continues at full speed.
 
-**Preset C + Compare = strongest demo.** 16 nodes vs 48. 9 cost vs 25. One frame.
+**Preset C + Compare = strongest demo.** 16 nodes vs 27. 9 cost vs 17. One frame.
 
 ---
 
@@ -188,6 +192,8 @@ S  ·  ·  ·  ·  ·
 All search functions are generators yielding `SearchFrame` after each expansion.
 
 ### BFS
+
+**Neighbor order**: URDL (up, right, down, left) — canonical across all algorithms.
 
 ```python
 from collections import deque
@@ -228,15 +234,19 @@ def bfs_search(world):
 
 ### DFS
 
+**Neighbor order**: up, right, down, left (URDL). This order is canonical across ALL algorithms for reproducibility.
+
 ```python
 def dfs_search(world):
     stack = [world.start]
+    in_stack = {world.start}   # prevents duplicate pushes + parent overwrite
     visited = set()
     parent = {world.start: None}
     expanded = 0
 
     while stack:
         current = stack.pop()
+        in_stack.discard(current)
         expanded += 1
         visited.add(current)
 
@@ -249,9 +259,10 @@ def dfs_search(world):
         if current == world.goal:
             return SearchResult(success=True, ...)
 
-        for n in world.get_neighbors(current):
-            if n not in visited:
-                parent[n] = current
+        for n in world.get_neighbors(current):  # URDL order
+            if n not in visited and n not in in_stack:
+                parent[n] = current             # set ONCE, never overwritten
+                in_stack.add(n)
                 stack.append(n)
 
     return SearchResult(success=False, ...)
@@ -376,6 +387,42 @@ def astar_search(world):
     return SearchResult(success=False, ...)
 ```
 
+### DLS (DFS with depth limit)
+
+```python
+def dls_search(world, depth_limit):
+    stack = [(world.start, 0)]
+    in_stack = {world.start}
+    visited = set()
+    parent = {world.start: None}
+    expanded = 0
+
+    while stack:
+        current, depth = stack.pop()
+        in_stack.discard(current)
+        expanded += 1
+        visited.add(current)
+
+        yield SearchFrame(
+            frontier=[n for n, _ in stack],
+            visited=visited.copy(), current=current,
+            path=reconstruct_path(parent, current),
+            g=float(depth), h=world.heuristic(current),
+            depth=depth, depth_limit=depth_limit)
+
+        if current == world.goal:
+            return SearchResult(success=True, ...)
+
+        if depth < depth_limit:
+            for n in world.get_neighbors(current):  # URDL order
+                if n not in visited and n not in in_stack:
+                    parent[n] = current
+                    in_stack.add(n)
+                    stack.append((n, depth + 1))
+
+    return SearchResult(success=False, ...)
+```
+
 ### IDDFS
 
 ```python
@@ -472,7 +519,7 @@ def iddfs_search(world):
 | 🟧 Orange | Current node |
 | 🟪 Purple | Final path |
 
-Mud cells: darker background tint. Q-values: brighter green = higher max-Q.
+Mud cells: darker background tint. Q-values: brighter green = higher max-Q *for that state* (best action value, not cell quality).
 
 ---
 
@@ -507,7 +554,8 @@ class GridWorld:
     agent_pos: tuple[int, int]   # mutable; agent classes only
 
     def get_neighbors(self, pos) -> list[tuple[int, int]]:
-        """Walkable neighbors (excludes walls, in bounds)."""
+        """Walkable neighbors (excludes walls, in bounds).
+        Returns in canonical URDL order: up, right, down, left."""
 
     def get_cost(self, pos) -> int:
         """Cost to step ON this cell. Walls→inf. Goal→0 (not counted)."""
@@ -661,7 +709,7 @@ class LearningAgent:
 
 **Search (Preset B)**: *"Short-cut trap. BFS finds 8-step path through mud, cost 16. UCS finds 9-step clean path, cost 8. Step-count ≠ cost."*
 
-**Killer demo (Preset C + Compare)**: *"A* left, Greedy right. Greedy's heuristic pulls it into the mud — 4 expensive cells, cost 25, 48 nodes. A* adds real path cost, goes around — cost 9, 16 nodes. Nearly 3× worse. That's f(n)=g(n)+h(n)."*
+**Killer demo (Preset C + Compare)**: *"A* left, Greedy right. S→down left edge, cost 9, 16 nodes. Greedy enters mud at (2,4), costs 17, 27 nodes. Nearly 2× worse. Heuristic alone is blind to cost — that's f(n)=g(n)+h(n)."*
 
 ---
 
