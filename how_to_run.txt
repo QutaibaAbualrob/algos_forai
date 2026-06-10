@@ -1,0 +1,9 @@
+install python:
+	https://www.python.org/downloads/
+
+Go to the dir where the files are:
+	cd E:\visualcode\algos_forai
+
+	python main.py
+
+	GOOD TO GO!!
