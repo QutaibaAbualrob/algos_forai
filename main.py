@@ -2,6 +2,7 @@
 
 Three modes: Agent | Search | Compare.
 Keyboard: Space=Step  P=Play/Pause  R=Reset  1/2/3=presets.
+Logs: written to logs/ folder (one file per session).
 """
 
 import tkinter as tk
@@ -16,6 +17,7 @@ from agents import (
     SimpleReflexAgent, ModelReflexAgent, GoalBasedAgent,
     UtilityBasedAgent, LearningAgent,
 )
+from logger import SessionLogger
 
 # ══════════════════════════════════════════════════════════════════
 #  GridCanvas — draws the grid + overlays
@@ -178,6 +180,8 @@ class App(tk.Tk):
         self.configure(bg="#1e1e1e")
 
         # ── state ────────────────────────────────────────────
+        self.logger = SessionLogger()
+        self.logger.mode("agent", "Goal-based")
         self.world = GridWorld.preset_a()
         self.mode = "agent"                      # agent | search | compare
         self.agent_type = "Goal-based"
@@ -378,6 +382,7 @@ class App(tk.Tk):
         v = self.mode_cb.get()
         self.mode = {"Agent": "agent", "Search": "search",
                       "Compare": "compare"}.get(v, "agent")
+        self.logger.mode(self.mode, v)
         self._refresh_ui()
 
     def _set_sub(self):
@@ -398,6 +403,7 @@ class App(tk.Tk):
         idx = self.preset_cb.current()
         presets = [GridWorld.preset_a, GridWorld.preset_b, GridWorld.preset_c]
         self.world = presets[idx]()
+        self.logger.preset(chr(ord('A') + idx))
         self.canvas.world = self.world
         self.canvas.draw_grid()
         if self.canvas_b:
@@ -433,6 +439,7 @@ class App(tk.Tk):
             self._init_compare()
 
         self._update_info()
+        self.logger.reset()
         self.log("— reset —")
 
     # ══════════════════════════════════════════════════════════
@@ -502,16 +509,20 @@ class App(tk.Tk):
             return
 
         if isinstance(self.agent, LearningAgent):
-            # Step Episode — run one full episode
             reward = self.agent.run_episode()
-            self.log(f"Ep {self.agent.episode_count}: reward={reward:.0f}  "
-                     f"ε={self.agent.get_epsilon():.3f}")
+            ep = self.agent.episode_count
+            total = self.agent.episodes
+            eps = self.agent.get_epsilon()
+            self.logger.learning_episode(ep, total, reward, eps)
+            self.log(f"Ep {ep}: reward={reward:.0f}  ε={eps:.3f}")
             self._display_agent()
         else:
             action, rule = self.agent.step()
+            self.logger.step_agent(action, rule, self.agent_type)
             self.log(f"→ {action}  ({rule})")
             self._display_agent()
             if action == "stop":
+                self.logger.agent_stuck(self.agent_type, self.world.agent_pos)
                 self.log("Agent stopped.")
 
     def _search_step(self):
@@ -523,6 +534,9 @@ class App(tk.Tk):
             self.search_result = e.value
             self.search_done = True
             if self.search_result.success:
+                self.logger.goal_found(self.search_algo,
+                    self.search_result.cost, self.search_result.nodes_expanded,
+                    self.search_result.path)
                 self.log(f"✓ Goal!  cost={self.search_result.cost:.0f}  "
                          f"nodes={self.search_result.nodes_expanded}")
                 self.canvas.draw_grid()
@@ -530,11 +544,14 @@ class App(tk.Tk):
                     path=self.search_result.path,
                     agent_pos=self.world.agent_pos)
             else:
+                self.logger.no_path(self.search_algo,
+                    self.search_result.nodes_expanded)
                 self.log(f"✗ No path.  expanded={self.search_result.nodes_expanded}")
             self._stop()
             return
 
         if getattr(frame, "special", None) == "DEPTH_LIMIT_CHANGE":
+            self.logger.iddfs_depth(frame.depth)
             self.log(f"IDDFS depth limit → {frame.depth}")
             return
 
@@ -548,8 +565,11 @@ class App(tk.Tk):
 
         algo = self.search_algo
         if algo in ('UCS', 'Greedy', 'A*'):
+            self.logger.step_search(algo, frame.current, len(frame.frontier),
+                                     frame.g, frame.h)
             self.log(f"expanded {frame.current}  g={frame.g:.1f} h={frame.h:.1f}")
         else:
+            self.logger.step_search(algo, frame.current, len(frame.frontier))
             self.log(f"expanded {frame.current}  frontier={len(frame.frontier)}")
 
     def _compare_step(self):
@@ -577,6 +597,8 @@ class App(tk.Tk):
             )
 
         if self.done_a and self.done_b:
+            self.logger.compare_stats(self.cmp_a, self.res_a,
+                                       self.cmp_b, self.res_b)
             self._stop()
 
     # ══════════════════════════════════════════════════════════
