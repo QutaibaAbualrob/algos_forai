@@ -285,15 +285,23 @@ class App(tk.Tk):
                              state="disabled", wrap="word")
         self.info.pack(side="left", fill="y", padx=(0, 4))
 
-        # Canvas area (right) — uses a container frame for Compare mode
+        # Canvas area (right) — contains up to 2 labelled panels
         self.canvas_frame = tk.Frame(self.main_frame, bg="#1e1e1e")
         self.canvas_frame.pack(side="left", fill="both", expand=True)
 
-        # single canvas (agent / search mode)
-        self.canvas = GridCanvas(self.canvas_frame, self.world, width=480, height=480)
-        self.canvas.pack(side="left")
+        # Panel A — always present, holds the primary canvas
+        self.panel_a = tk.Frame(self.canvas_frame, bg="#1e1e1e")
+        self.panel_a.pack(side="left", fill="both", expand=True)
 
-        # second canvas for Compare mode (hidden initially)
+        self.label_a = tk.Label(self.panel_a, text="", bg="#1e1e1e", fg="#aaa",
+                                 font=("Consolas", 10, "bold"))
+
+        self.canvas = GridCanvas(self.panel_a, self.world, width=480, height=480)
+        self.canvas.pack(fill="both", expand=True)
+
+        # Panel B — for Compare mode (hidden initially)
+        self.panel_b = None
+        self.label_b = None
         self.canvas_b = None
 
     # ══════════════════════════════════════════════════════════
@@ -368,14 +376,33 @@ class App(tk.Tk):
             self.ep_label.pack_forget()
             self.ep_spin.pack_forget()
 
-        # compare second canvas
-        if m == "compare" and self.canvas_b is None:
-            self.canvas_b = GridCanvas(self.canvas_frame, self.world,
-                                        width=380, height=480)
-            self.canvas_b.pack(side="left", padx=(4, 0))
-        elif m != "compare" and self.canvas_b is not None:
-            self.canvas_b.destroy()
-            self.canvas_b = None
+        # compare panel B — created on demand, same size as panel A
+        if m == "compare":
+            if self.panel_b is None:
+                self.panel_b = tk.Frame(self.canvas_frame, bg="#1e1e1e")
+                self.panel_b.pack(side="left", fill="both", expand=True,
+                                  after=self.panel_a, padx=(4, 0))
+
+                self.label_b = tk.Label(self.panel_b, text=self.cmp_b,
+                                         bg="#1e1e1e", fg="#aaa",
+                                         font=("Consolas", 10, "bold"))
+                self.label_b.pack(pady=(2, 0))
+
+                self.canvas_b = GridCanvas(self.panel_b, self.world,
+                                            width=480, height=480)
+                self.canvas_b.pack(fill="both", expand=True)
+
+            # show algorithm labels above each panel
+            self.label_a.configure(text=self.cmp_a)
+            self.label_a.pack(pady=(2, 0))
+            self.label_b.configure(text=self.cmp_b)
+        else:
+            if self.panel_b is not None:
+                self.panel_b.destroy()
+                self.panel_b = None
+                self.label_b = None
+                self.canvas_b = None
+            self.label_a.pack_forget()   # hide label in single-canvas mode
 
         self._reset()
 
@@ -398,6 +425,8 @@ class App(tk.Tk):
 
     def _set_cmp_b(self):
         self.cmp_b = self.cmp_b_cb.get()
+        if self.label_b:
+            self.label_b.configure(text=self.cmp_b)
         self._refresh_ui()
 
     def _set_preset(self):
