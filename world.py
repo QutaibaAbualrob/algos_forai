@@ -149,3 +149,22 @@ class GridWorld:
             w.set_cell(r, c, "wall", float('inf'))
 
         return w
+
+    @staticmethod
+    def preset_d() -> 'GridWorld':
+        """The Labyrinth 8x8.  S=(0,0), G=(7,7).
+        Walls: 20 cells forming corridors.  Mud pocket: (4,2)(4,3)(5,2)(5,3)."""
+        w = GridWorld(8, 8)
+        w.start = (0, 0)
+        w.goal = (7, 7)
+        w.agent_pos = w.start
+
+        for r, c in [(0,2), (1,2), (1,4), (1,5), (1,6),
+                     (2,1), (2,2), (2,6), (3,4),
+                     (4,0), (4,1), (4,4), (4,6), (4,7),
+                     (6,1), (6,2), (6,3), (6,4), (6,5), (7,4)]:
+            w.set_cell(r, c, "wall", float('inf'))
+        for r, c in [(4,2), (4,3), (5,2), (5,3)]:
+            w.set_cell(r, c, "mud", 5)
+
+        return w

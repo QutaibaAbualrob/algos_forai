@@ -87,6 +87,10 @@ Each agent adds **one capability** to the decision pipeline:
 
 **Key insight:** Russell & Norvig hierarchy — each adds ONE component (memory → goal → utility → learning). Goal-based and Utility-based share architecture; only the metric differs. Model-based reflex does NOT detect dead ends (that requires search) — it just avoids revisiting and known walls.
 
+**Why Goal-based can use any algorithm**: A goal-based agent only asks *"does this reach the goal?"* — a binary test. Any path to the goal satisfies it, regardless of cost. That's why BFS (step-optimal but cost-blind) and DFS (any path, no optimality) are valid choices alongside UCS/A*. A utility-based agent asks *"what's the BEST path?"* — it measures path quality via cost, so only cost-optimal algorithms (UCS, A*) make sense. BFS/DFS are blocked in the Utility-based dropdown.
+
+> **Preset B example**: Goal-based + BFS → 8 steps through mud (cost 16). Goal-based + A* → 9 steps around mud (cost 8). Both reach the goal — both satisfy the goal test. But only A* satisfies the utility function. This is why the algorithm choice matters.
+
 ### Learning Agent Rewards
 
 | Event | Reward |
@@ -102,18 +106,22 @@ Each agent adds **one capability** to the decision pipeline:
 
 **Wall hits**: when the agent tries to move into a wall, `move_agent()` returns False, the agent stays in the same state, and receives −10 reward. This creates a self-loop transition: (s, a) → (s, r=−10). The Q-value for that action in that state will drop, discouraging the agent from repeating the failed action. This is correct Q-learning behavior — the agent learns to avoid walls by experiencing penalties.
 
-**Episodes**: 100 (preset A/B) or 300 (preset C). ε decays linearly to 0.01.
+**Episodes**: 100 (preset A/B), 300–500 (preset C/D). ε decays linearly to 0.01.
 
 ### Agent Parameters (Agent mode only)
 
-| Parameter | Default | Options |
-|---|---|---|
-| Goal-based: algorithm | A* | BFS / DFS / UCS / A* |
-| Utility-based: algorithm | A* | UCS / A* |
-| Learning: Episodes | 100 / 300 | 50–1000 |
-| Learning: ε | 0.3 | decays to 0.01 |
-| Learning: α | 0.1 | 0.01–1.0 |
-| Learning: γ | 0.9 | 0.5–1.0 |
+| Parameter | Default | Options | UI |
+|---|---|---|---|
+| Goal-based: algorithm | A* | BFS / DFS / UCS / A* | Dropdown next to agent type |
+| Utility-based: algorithm | A* | UCS / A* | Dropdown next to agent type |
+| Learning: Episodes | 100 | 50–1000 | Spinbox next to agent type |
+| Learning: ε | 0.3 | decays to 0.01 | — |
+| Learning: α | 0.1 | 0.01–1.0 | — |
+| Learning: γ | 0.9 | 0.5–1.0 | — |
+
+The algorithm dropdown appears only when Goal-based or Utility-based is selected.
+Changing the algorithm replans the path immediately (on Reset or dropdown change).
+Utility-based restricts choices to UCS / A* — selecting BFS/DFS is blocked.
 
 ---
 
@@ -131,9 +139,9 @@ Each agent adds **one capability** to the decision pipeline:
 | 6 | **Greedy** | Priority queue by h(n) | — | ✓ | Rushes toward goal. Cost-blind. Tie-break: lower row, then lower col. |
 | 7 | **A\*** | Priority queue by g+h | ✓ | ✓ | Cost-aware + goal-directed. Optimal. |
 
-**Critical**: BFS/UCS/A* identical on uniform grids — that's the teaching point. Presets A, B, C show divergence.
+**Critical**: BFS/UCS/A* identical on uniform grids — that's the teaching point. Presets A, B, C, D show divergence.
 
-### 3 Preset Grids
+### 4 Preset Grids
 
 Symbols: `S`=Start, `G`=Goal, `#`=Wall(∞), `~`=Mud(cost 5), `·`=Normal(cost 1).
 
@@ -181,6 +189,24 @@ S  ·  ·  ·  ·  ·
 - **A\\*'s path**: goes around via left edge. S→down to (5,0)→right along row 5 to G. All cost 1. **Cost = 9.**
 - **Divergence**: 17 vs 9 — nearly 2× worse. Greedy ignores cost, takes the shorter-heuristic muddy path. A* factors actual cost into f(n).
 - **Teaches**: Why f(n)=g(n)+h(n) matters. Heuristic alone is blind to cost. Even on a small grid, the gap is real and visible.
+
+#### Preset D: The Labyrinth (8×8)
+
+```
+S  ·  #  ·  ·  ·  ·  ·
+·  ·  #  ·  #  #  #  ·
+·  #  #  ·  ·  ·  #  ·
+·  ·  ·  ·  #  ·  ·  ·
+#  #  ~  ~  #  ·  #  #
+·  ·  ~  ~  ·  ·  ·  ·
+·  #  #  #  #  #  ·  ·
+·  ·  ·  ·  #  ·  ·  G
+```
+- S=(0,0), G=(7,7). 8×8 grid, 20 walls, 4 mud cells at the center-left.
+- Walls force narrow corridors — a true maze larger than the other presets.
+- Mud pocket: (4,2), (4,3), (5,2), (5,3). A* will route around it; Greedy may tunnel through.
+- **Use for**: stress-testing algorithms on a larger, more complex topology. DFS can get lost in deep branches. BFS expands broadly. A* shines with Manhattan heuristic guiding through corridors. Learning agent benefits from more episodes (300–500).
+- **Compare mode**: A* vs Greedy shows clear divergence on the mud pocket. DFS vs BFS contrasts depth-first wandering vs methodical layer expansion.
 
 ---
 

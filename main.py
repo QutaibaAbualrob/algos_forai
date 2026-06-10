@@ -175,7 +175,7 @@ class App(tk.Tk):
 
     def __init__(self):
         super().__init__()
-        self.title("AI Agents + Search Algorithms Lab")
+        self.title("Qutaiba's AI Agents + Search Algorithms Lab")
         self.geometry("920x680")
         self.configure(bg="#1e1e1e")
 
@@ -187,6 +187,7 @@ class App(tk.Tk):
         self.agent_type = "Goal-based"
         self.search_algo = "BFS"
         self.cmp_a = "A*";  self.cmp_b = "Greedy"
+        self.agent_algo = "A*"   # algo for Goal-based / Utility-based agents
 
         self.running = False
         self.generator = None
@@ -225,6 +226,10 @@ class App(tk.Tk):
         self.sub_cb.pack(side="left", padx=2)
         self.sub_cb.bind("<<ComboboxSelected>>", lambda e: self._set_sub())
 
+        # algorithm selector (agent mode, Goal-based / Utility-based only)
+        self.algo_cb = ttk.Combobox(bar, state="readonly", width=6)
+        self.algo_cb.bind("<<ComboboxSelected>>", lambda e: self._set_agent_algo())
+
         # compare algo B
         self.cmp_b_cb = ttk.Combobox(bar,
             values=["BFS","DFS","DLS","IDDFS","UCS","Greedy","A*"],
@@ -235,7 +240,8 @@ class App(tk.Tk):
         # preset
         tk.Label(bar, text="  Preset:", bg="#2d2d2d", fg="white").pack(side="left")
         self.preset_cb = ttk.Combobox(bar,
-            values=["A - Open Plain", "B - Short-Cut Trap", "C - Mud Wall"],
+            values=["A - Open Plain", "B - Short-Cut Trap", "C - Mud Wall",
+                    "D - The Labyrinth"],
             state="readonly", width=18)
         self.preset_cb.set("A - Open Plain")
         self.preset_cb.pack(side="left", padx=2)
@@ -376,6 +382,21 @@ class App(tk.Tk):
             self.ep_label.pack_forget()
             self.ep_spin.pack_forget()
 
+        # show/hide algorithm dropdown for Goal-based / Utility-based
+        show_algo = (m == "agent" and self.agent_type in
+                     ("Goal-based", "Utility-based"))
+        if show_algo:
+            if self.agent_type == "Goal-based":
+                self.algo_cb["values"] = ["BFS", "DFS", "UCS", "A*"]
+            else:
+                self.algo_cb["values"] = ["UCS", "A*"]
+                if self.agent_algo not in ("UCS", "A*"):
+                    self.agent_algo = "A*"   # BFS/DFS invalid for Utility-based
+            self.algo_cb.set(self.agent_algo)
+            self.algo_cb.pack(side="left", padx=(4, 2), after=self.sub_cb)
+        else:
+            self.algo_cb.pack_forget()
+
         # compare panel B — created on demand, same size as panel A
         if m == "compare":
             if self.panel_b is None:
@@ -429,9 +450,14 @@ class App(tk.Tk):
             self.label_b.configure(text=self.cmp_b)
         self._refresh_ui()
 
+    def _set_agent_algo(self):
+        self.agent_algo = self.algo_cb.get()
+        self._reset()
+
     def _set_preset(self):
         idx = self.preset_cb.current()
-        presets = [GridWorld.preset_a, GridWorld.preset_b, GridWorld.preset_c]
+        presets = [GridWorld.preset_a, GridWorld.preset_b, GridWorld.preset_c,
+                   GridWorld.preset_d]
         self.world = presets[idx]()
         self.logger.preset(chr(ord('A') + idx))
         self.canvas.world = self.world
@@ -489,7 +515,7 @@ class App(tk.Tk):
         if self.agent_type == "Learning":
             self.agent = cls(self.world, episodes=self.ep_var.get())
         elif self.agent_type in ("Goal-based", "Utility-based"):
-            algo = "astar" if self.agent_type == "Goal-based" else "astar"
+            algo = {"BFS": "bfs", "DFS": "dfs", "UCS": "ucs", "A*": "astar"}[self.agent_algo]
             self.agent = cls(self.world, algorithm=algo)
             self.agent.plan()
         else:
@@ -683,6 +709,7 @@ class App(tk.Tk):
                  f"Pos: {self.world.agent_pos}",
                  ""]
         if self.agent_type in ("Goal-based", "Utility-based") and self.agent:
+            lines.append(f"Algorithm: {self.agent_algo}")
             lines.append(f"Path len: {len(getattr(self.agent, 'planned_path', []))}")
             if hasattr(self.agent, 'get_path_cost'):
                 lines.append(f"Cost: {self.agent.get_path_cost():.0f}")
