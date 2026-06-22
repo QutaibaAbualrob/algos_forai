@@ -338,3 +338,162 @@ But these are **split across different agents** — no single agent has all thre
 | Compare step (sync) | `main.py` | 643–670 |
 | Run loop (root.after) | `main.py` | 776–787 |
 | Session logger | `logger.py` | 32–108 |
+
+---
+
+# Search Algorithms — Complete Reference
+
+> All 7 algorithms, what they do, when to use them, and what they suck at.
+
+---
+
+## BFS — Breadth-First Search
+
+**Data structure:** Queue (FIFO)  
+**Code:** `search.py` lines 51–84  
+**Preset demo:** Preset A (all uniform cost — BFS = UCS = A*)
+
+| | |
+|---|---|
+| **How it works** | Expands nodes in order of discovery — layer by layer from start. Uses `deque.popleft()` to always expand the oldest node in frontier. |
+| **g(n)** | — (doesn't use costs) |
+| **h(n)** | — |
+| **Pros** | ✅ **Complete** — always finds a path if one exists. ✅ **Optimal for uniform cost** — finds fewest steps. ✅ Simple to implement and explain. |
+| **Cons** | ❌ Memory-hungry: stores entire frontier (O(b^d)). ❌ **Not cost-optimal** — ignores terrain costs, can take expensive shortcuts. ❌ Expands EVERY node at depth d before any at d+1. |
+| **When to use** | Uniform-cost grids. Teaching uninformed search. Baseline to compare against. |
+| **Preset B result** | 8 steps, cost = 16 (through mud — suboptimal) |
+
+---
+
+## DFS — Depth-First Search
+
+**Data structure:** Stack (LIFO)  
+**Code:** `search.py` lines 89–125  
+**Preset demo:** Preset D (gets lost in deep corridors)
+
+| | |
+|---|---|
+| **How it works** | Expands the most recently discovered node first — goes deep, backtracks when stuck. Uses list as stack: `pop()` from end. |
+| **g(n)** | — |
+| **h(n)** | — |
+| **Pros** | ✅ **Low memory**: O(b·m) — only stores current path + siblings. ✅ Can find deep solutions faster than BFS. ✅ Good when solution is deep and branching factor is high. |
+| **Cons** | ❌ **Not optimal** — finds SOME path, not best path. ❌ **Not complete on infinite graphs** (but fine on finite grids with visited set). ❌ Can wander down long dead-end corridors. ❌ `in_stack` set required to prevent parent-pointer corruption. |
+| **When to use** | Memory-constrained environments. When any path is good enough. Contrasting against BFS. |
+| **Preset D result** | Wanders deeply, may find a convoluted long path |
+
+---
+
+## DLS — Depth-Limited Search
+
+**Data structure:** Stack + depth counter (DFS with cutoff)  
+**Code:** `search.py` lines 130–169  
+**Preset demo:** Preset A, limit=8 finds goal; limit=4 fails
+
+| | |
+|---|---|
+| **How it works** | DFS that refuses to expand nodes beyond `depth_limit`. Stack stores `(node, depth)` tuples. Children only generated when `depth < depth_limit`. |
+| **g(n)** | — (depth used as cost proxy) |
+| **h(n)** | — |
+| **Pros** | ✅ **Prevents infinite descent** — bounded DFS. ✅ Lower memory than BFS. ✅ Parameterized: slider 1–20 in GUI. |
+| **Cons** | ❌ **Not complete** — can miss solutions deeper than the limit. ❌ **Not optimal**. ❌ User must know or guess the right depth. ❌ If limit is too shallow, fails even when solution exists. |
+| **When to use** | When you know approximate solution depth. Teaching depth-bounding as a concept. Building block for IDDFS. |
+| **Preset A result** | limit=8 → finds 8-step path (success). limit=4 → fails (frontier exhausted before reaching depth 8) |
+
+---
+
+## IDDFS — Iterative Deepening DFS
+
+**Data structure:** Repeated DLS at depth 1, 2, 3, …  
+**Code:** `search.py` lines 174–184  
+**Preset demo:** Preset A (finds optimal path with BFS-like guarantees, DFS-like memory)
+
+| | |
+|---|---|
+| **How it works** | Runs DLS at depth 1, then depth 2, then depth 3… until goal found. Each iteration rebuilds the tree from scratch. Uses `yield from dls_search(world, depth_limit)`. |
+| **g(n)** | — |
+| **h(n)** | — |
+| **Pros** | ✅ **Complete + optimal for uniform cost** (like BFS). ✅ **Low memory** (like DFS): O(b·d). ✅ Combines best of both worlds. ✅ The repeated work is only a constant factor: total ≈ b/(b−1) × last iteration. |
+| **Cons** | ❌ **Repeats work** — re-expands start node d times. ❌ Slower than BFS in practice for shallow solutions. ❌ Still not cost-optimal (ignores terrain costs). ❌ Max depth=50 hardcoded safety limit. |
+| **When to use** | When memory is tight AND optimality matters AND costs are uniform. Teaching the memory-vs-time tradeoff. |
+| **Preset A result** | Same 8-step path as BFS, but re-expands nodes each iteration |
+
+---
+
+## UCS — Uniform-Cost Search (Dijkstra)
+
+**Data structure:** Priority queue by g(n)  
+**Code:** `search.py` lines 189–230  
+**Preset demo:** Preset B (9 steps, cost 8 — avoids mud, optimal)
+
+| | |
+|---|---|
+| **How it works** | Always expands the node with the lowest PATH COST from start. Uses `heapq` ordered by `(g, counter, node)`. `cost_so_far` tracks best known g to each node; stale entries are skipped. |
+| **g(n)** | ✅ Sum of actual cell costs from start |
+| **h(n)** | — |
+| **Pros** | ✅ **Always cost-optimal** — finds cheapest path regardless of terrain. ✅ **Complete**. ✅ Works on ANY cost model (normal=1, mud=5, walls=∞). ✅ Same result as BFS on uniform grids. |
+| **Cons** | ❌ **Can expand many nodes** — explores in all directions equally. ❌ No goal-direction bias — might expand away from goal if costs are low. ❌ Higher memory than DFS (stores full frontier in heap). ❌ `counter` tiebreaker needed to prevent tuple comparison errors. |
+| **When to use** | Non-uniform costs (mud, varied terrain). When path cost matters more than step count. Preset B/C/D. |
+| **Preset B result** | 9 steps, cost = 8 (clean path around mud — optimal) |
+
+---
+
+## Greedy Best-First Search
+
+**Data structure:** Priority queue by h(n) only  
+**Code:** `search.py` lines 235–276  
+**Preset demo:** Preset C (rushes into mud, cost 17 — nearly 2× worse)
+
+| | |
+|---|---|
+| **How it works** | Always expands the node CLOSEST to goal by heuristic (Manhattan distance). Uses `heapq` ordered by `(h, row, col, counter, node)`. Tie-breaking by lower row, then lower col. |
+| **g(n)** | — (ignored!) |
+| **h(n)** | ✅ Manhattan distance to goal |
+| **Pros** | ✅ **Fast** — often expands fewer nodes than A*. ✅ Goal-directed — "rushes" toward goal. ✅ Simple to understand (greedy = take what looks best now). |
+| **Cons** | ❌ **Not optimal** — cost-blind. Can be led into expensive terrain. ❌ **Not complete on some graphs** (though fine on grids). ❌ The "greedy shortcut" is often the expensive shortcut. ❌ Deterministic tie-breaking required (row, col, counter) or behavior is unpredictable. |
+| **When to use** | Teaching WHY cost matters. Demonstrating heuristic-only failure. Side-by-side vs A* (Preset C killer demo). |
+| **Preset C result** | 27 nodes, cost = 17 (through 2 mud cells — suboptimal) |
+
+---
+
+## A* Search
+
+**Data structure:** Priority queue by f(n) = g(n) + h(n)  
+**Code:** `search.py` lines 281–324  
+**Preset demo:** Preset C vs Greedy (16 nodes, cost 9 — optimal + efficient)
+
+| | |
+|---|---|
+| **How it works** | Combines UCS and Greedy: expands by f = g + h (actual cost so far + estimated remaining). Uses `heapq` by `(f, counter, node)`. `g_score` tracks best known g; stale entries skipped. |
+| **g(n)** | ✅ Actual cost from start |
+| **h(n)** | ✅ Manhattan distance (admissible + consistent) |
+| **Pros** | ✅ **Optimal** — guaranteed cheapest path with admissible heuristic. ✅ **Efficient** — expands fewer nodes than UCS (h biases toward goal). ✅ **Complete**. ✅ The gold standard for pathfinding. |
+| **Cons** | ❌ **Needs a good heuristic** — bad heuristic = bad performance. ❌ Memory: stores frontier + g_score dict. ❌ Heuristic MUST be admissible (never overestimate) for optimality. ❌ More complex to implement than BFS/DFS. |
+| **When to use** | ALWAYS for pathfinding with non-uniform costs. The go-to algorithm. Teaching f(n) = g(n) + h(n). Best demo: Preset C Compare mode. |
+| **Preset C result** | 16 nodes, cost = 9 (avoids mud via left edge — optimal) |
+
+---
+
+## Algorithm Cheat Sheet
+
+| Algorithm | Frontier | Optimal? | Complete? | Memory | Speed | Uses g? | Uses h? |
+|-----------|----------|----------|-----------|--------|-------|---------|---------|
+| **BFS** | Queue | Steps only | Yes | O(b^d) | Medium | — | — |
+| **DFS** | Stack | No | On finite | O(b·m) | Varies | — | — |
+| **DLS** | Stack+limit | No | No (if limit<d) | O(b·ℓ) | Varies | — | — |
+| **IDDFS** | Repeated DLS | Steps only | Yes | O(b·d) | Slow (repeats) | — | — |
+| **UCS** | Heap by g | **Cost** | Yes | O(b^(1+⌊C*/ε⌋)) | Slow (all dirs) | ✅ | — |
+| **Greedy** | Heap by h | No | Yes (grids) | Depends | **Fastest** | — | ✅ |
+| **A\*** | Heap by g+h | **Cost** | Yes | Depends | Fast (directed) | ✅ | ✅ |
+
+---
+
+## Best Comparison Pairs for Presentation
+
+| Preset | Algorithm A | Algorithm B | What it shows |
+|--------|------------|------------|---------------|
+| **A** | BFS | DFS | Layer-by-layer vs deep-first divergence |
+| **B** | BFS | UCS | Step-count (8) ≠ cost (16 vs 8) |
+| **B** | BFS | A* | Same as UCS comparison, with heuristic |
+| **C** | A* | Greedy | **Killer demo: 9 vs 17 cost, 16 vs 27 nodes** |
+| **D** | BFS | DFS | DFS wanders deep, BFS expands methodically |
+| **D** | A* | Greedy | Mud pocket divergence on larger maze |
