@@ -2,7 +2,7 @@
 
 > Academic demonstrator for Artificial Intelligence course.
 > 5 agent architectures + 7 search algorithms, all running on grid-worlds.
-> Zero dependencies. Ready to present to Dr. Ala Hamarsheh.
+> Zero dependencies.
 
 ---
 
