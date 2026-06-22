@@ -14,8 +14,8 @@ Run mode (next() in a root.after() loop). This is the "Generator Trick."
 ALGORITHM LINEUP (7 total):
   1. BFS     — Queue (FIFO), layer-by-layer, optimal for uniform cost
   2. DFS     — Stack (LIFO), deep first, NOT optimal
-  3. DLS     — DFS with depth cutoff, parameterized limit
-  4. IDDFS   — Repeated DLS at increasing depths (1,2,3...)
+  3. DLS  (Depth-Limited Search)   — DFS with depth cutoff, parameterized limit
+  4. IDDFS (Iterative Deepening Depth-First Search)   — Repeated DLS at increasing depths (1,2,3...)
   5. UCS     — Priority queue by g(n), cost-optimal for any cost
   6. Greedy  — Priority queue by h(n) only, cost-blind, fast
   7. A*      — Priority queue by f(n)=g(n)+h(n), optimal + efficient
